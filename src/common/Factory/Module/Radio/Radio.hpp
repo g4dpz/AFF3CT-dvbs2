@@ -25,13 +25,12 @@ public:
 	uint64_t fifo_size         = uint64_t(10000000000);
 	int n_frames               = 1;
 	std::string type           = "USRP";
-	std::string usrp_addr      = ""; // 192.168.20.2
-	std::string usrp_type      = ""; // b200
-	double clk_rate            = 0; // 125e6
+	std::string serial         = ""; // B200-mini serial number for multi-device selection
+	double clk_rate            = 0;  // B200-mini max: 61.44e6
 
 	bool rx_enabled            = false;
 	double rx_rate             = 0; // if rx_rate is not overriden, rx is disabled
-	std::string rx_subdev_spec = ""; // A:0
+	std::string rx_subdev_spec = ""; // defaults to "A:A" for B200-mini
 	std::string rx_antenna     = "RX2";
 	double rx_freq             = 1090e6;
 	double rx_gain             = 10;
@@ -41,14 +40,14 @@ public:
 
 	bool tx_enabled            = false;
 	double tx_rate             = 0; // if tx_rate is not overriden, tx is disabled
-	std::string tx_subdev_spec = ""; // A:0
+	std::string tx_subdev_spec = ""; // defaults to "A:A" for B200-mini
 	std::string tx_antenna     = "TX/RX";
 	double tx_freq             = 1090e6;
 	double tx_gain             = 10;
 
 	int rx_pin_core            = 1;
 	int tx_pin_core            = 3;
-	std::string clock_source   = "internal"; // "internal", "gpsdo", "external"
+	std::string clock_source   = "internal"; // "internal" or "gpsdo"
 
 	// deduced parameters
 
@@ -62,20 +61,20 @@ public:
 	virtual void store          (const cli::Argument_map_value &vals);
 	virtual void get_headers    (std::map<std::string,tools::header_list>& headers, const bool full = true) const;
 
-	// B200-mini parameter validation (callable independently of store())
+	// B200-mini parameter validation
 	void validate() const;
 
-	// Build the UHD device string from current parameters (testable without hardware)
+	// Build the UHD device string (always targets B200-mini)
 	std::string build_device_string() const;
 
-	// Get effective subdev specs after B200 defaulting (testable without hardware)
+	// Get effective subdev specs (defaults to "A:A" if not user-specified)
 	std::string get_effective_rx_subdev_spec() const;
 	std::string get_effective_tx_subdev_spec() const;
 
-	// Returns true if the time source should also be set to "gpsdo" (testable without hardware)
+	// Returns true if the time source should also be set to "gpsdo"
 	bool should_set_time_source_gpsdo() const { return clock_source == "gpsdo"; }
 
-	// Returns true if the given pin_core value is valid (non-negative and less than available cores)
+	// Returns true if the given pin_core value is valid
 	bool is_pin_core_valid(int pin_core) const;
 
 	template <typename R = float>
@@ -85,4 +84,3 @@ public:
 }
 
 #endif /* FACTORY_RADIO_HPP_ */
-

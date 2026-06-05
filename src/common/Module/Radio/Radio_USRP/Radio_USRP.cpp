@@ -88,13 +88,9 @@ Radio_USRP<R>
 	}
 	catch (const std::exception& e)
 	{
-		if (params.usrp_type == "b200")
-		{
-			throw spu::tools::runtime_error(__FILE__, __LINE__, __func__,
-				"Failed to find B200-mini device on USB. Ensure the device is connected and "
-				"UHD images are installed (run 'uhd_images_downloader'). UHD error: " + std::string(e.what()));
-		}
-		throw; // re-throw original for non-B200 types
+		throw spu::tools::runtime_error(__FILE__, __LINE__, __func__,
+			"Failed to find B200-mini device on USB. Ensure the device is connected and "
+			"UHD images are installed (run 'uhd_images_downloader'). UHD error: " + std::string(e.what()));
 	}
 
 	if (params.clk_rate != 0)

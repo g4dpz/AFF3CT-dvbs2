@@ -4,7 +4,6 @@
 
 #include "Factory/Module/Radio/Radio.hpp"
 
-// Simple test framework macros
 static int tests_run = 0;
 static int tests_passed = 0;
 
@@ -25,166 +24,51 @@ static int tests_passed = 0;
         std::cout << "FAILED: " << msg << std::endl; \
     } while(0)
 
-// =============================================================================
-// Test: B200 + empty rx_subdev_spec → returns "A:A"
-// =============================================================================
-void test_b200_empty_rx_subdev()
+void test_empty_rx_subdev_defaults_aa()
 {
-    TEST("B200 + empty rx_subdev_spec -> returns A:A");
+    TEST("empty rx_subdev_spec -> returns A:A");
     aff3ct::factory::Radio radio;
-    radio.usrp_type = "b200";
     radio.rx_subdev_spec = "";
-
-    std::string result = radio.get_effective_rx_subdev_spec();
-
-    if (result == "A:A")
-        PASS();
-    else
-        FAIL("Expected 'A:A', got: '" + result + "'");
+    if (radio.get_effective_rx_subdev_spec() == "A:A") PASS();
+    else FAIL("Expected 'A:A'");
 }
 
-// =============================================================================
-// Test: B200 + empty tx_subdev_spec → returns "A:A"
-// =============================================================================
-void test_b200_empty_tx_subdev()
+void test_empty_tx_subdev_defaults_aa()
 {
-    TEST("B200 + empty tx_subdev_spec -> returns A:A");
+    TEST("empty tx_subdev_spec -> returns A:A");
     aff3ct::factory::Radio radio;
-    radio.usrp_type = "b200";
     radio.tx_subdev_spec = "";
-
-    std::string result = radio.get_effective_tx_subdev_spec();
-
-    if (result == "A:A")
-        PASS();
-    else
-        FAIL("Expected 'A:A', got: '" + result + "'");
+    if (radio.get_effective_tx_subdev_spec() == "A:A") PASS();
+    else FAIL("Expected 'A:A'");
 }
 
-// =============================================================================
-// Test: B200 + user-provided rx_subdev_spec "B:0" → returns "B:0" (not overwritten)
-// =============================================================================
-void test_b200_user_rx_subdev()
+void test_user_rx_subdev_preserved()
 {
-    TEST("B200 + user-provided rx_subdev_spec B:0 -> returns B:0");
+    TEST("user-provided rx_subdev_spec preserved");
     aff3ct::factory::Radio radio;
-    radio.usrp_type = "b200";
     radio.rx_subdev_spec = "B:0";
-
-    std::string result = radio.get_effective_rx_subdev_spec();
-
-    if (result == "B:0")
-        PASS();
-    else
-        FAIL("Expected 'B:0', got: '" + result + "'");
+    if (radio.get_effective_rx_subdev_spec() == "B:0") PASS();
+    else FAIL("Expected 'B:0'");
 }
 
-// =============================================================================
-// Test: B200 + user-provided tx_subdev_spec "B:0" → returns "B:0" (not overwritten)
-// =============================================================================
-void test_b200_user_tx_subdev()
+void test_user_tx_subdev_preserved()
 {
-    TEST("B200 + user-provided tx_subdev_spec B:0 -> returns B:0");
+    TEST("user-provided tx_subdev_spec preserved");
     aff3ct::factory::Radio radio;
-    radio.usrp_type = "b200";
     radio.tx_subdev_spec = "B:0";
-
-    std::string result = radio.get_effective_tx_subdev_spec();
-
-    if (result == "B:0")
-        PASS();
-    else
-        FAIL("Expected 'B:0', got: '" + result + "'");
+    if (radio.get_effective_tx_subdev_spec() == "B:0") PASS();
+    else FAIL("Expected 'B:0'");
 }
 
-// =============================================================================
-// Test: Non-B200 + empty rx_subdev_spec → returns "" (no defaulting)
-// =============================================================================
-void test_non_b200_empty_rx_subdev()
-{
-    TEST("Non-B200 + empty rx_subdev_spec -> returns empty");
-    aff3ct::factory::Radio radio;
-    radio.usrp_type = "n310";
-    radio.rx_subdev_spec = "";
-
-    std::string result = radio.get_effective_rx_subdev_spec();
-
-    if (result.empty())
-        PASS();
-    else
-        FAIL("Expected empty string, got: '" + result + "'");
-}
-
-// =============================================================================
-// Test: Non-B200 + empty tx_subdev_spec → returns "" (no defaulting)
-// =============================================================================
-void test_non_b200_empty_tx_subdev()
-{
-    TEST("Non-B200 + empty tx_subdev_spec -> returns empty");
-    aff3ct::factory::Radio radio;
-    radio.usrp_type = "n310";
-    radio.tx_subdev_spec = "";
-
-    std::string result = radio.get_effective_tx_subdev_spec();
-
-    if (result.empty())
-        PASS();
-    else
-        FAIL("Expected empty string, got: '" + result + "'");
-}
-
-// =============================================================================
-// Test: Non-B200 + user-provided rx_subdev_spec "A:0" → returns "A:0"
-// =============================================================================
-void test_non_b200_user_rx_subdev()
-{
-    TEST("Non-B200 + user-provided rx_subdev_spec A:0 -> returns A:0");
-    aff3ct::factory::Radio radio;
-    radio.usrp_type = "n310";
-    radio.rx_subdev_spec = "A:0";
-
-    std::string result = radio.get_effective_rx_subdev_spec();
-
-    if (result == "A:0")
-        PASS();
-    else
-        FAIL("Expected 'A:0', got: '" + result + "'");
-}
-
-// =============================================================================
-// Test: Non-B200 + user-provided tx_subdev_spec "A:0" → returns "A:0"
-// =============================================================================
-void test_non_b200_user_tx_subdev()
-{
-    TEST("Non-B200 + user-provided tx_subdev_spec A:0 -> returns A:0");
-    aff3ct::factory::Radio radio;
-    radio.usrp_type = "n310";
-    radio.tx_subdev_spec = "A:0";
-
-    std::string result = radio.get_effective_tx_subdev_spec();
-
-    if (result == "A:0")
-        PASS();
-    else
-        FAIL("Expected 'A:0', got: '" + result + "'");
-}
-
-// =============================================================================
-// main
-// =============================================================================
 int main()
 {
-    std::cout << "=== Subdevice Spec Defaulting Tests ===" << std::endl;
+    std::cout << "=== Subdevice Spec Defaulting Tests (B200-only) ===" << std::endl;
     std::cout << std::endl;
 
-    test_b200_empty_rx_subdev();
-    test_b200_empty_tx_subdev();
-    test_b200_user_rx_subdev();
-    test_b200_user_tx_subdev();
-    test_non_b200_empty_rx_subdev();
-    test_non_b200_empty_tx_subdev();
-    test_non_b200_user_rx_subdev();
-    test_non_b200_user_tx_subdev();
+    test_empty_rx_subdev_defaults_aa();
+    test_empty_tx_subdev_defaults_aa();
+    test_user_rx_subdev_preserved();
+    test_user_tx_subdev_preserved();
 
     std::cout << std::endl;
     std::cout << "=== Results: " << tests_passed << "/" << tests_run << " tests passed ===" << std::endl;
