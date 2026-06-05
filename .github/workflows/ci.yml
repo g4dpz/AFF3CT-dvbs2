@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ pkg-config
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. -G"Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-Wall -funroll-loops" \
+            -DSPU_LINK_HWLOC=OFF \
+            -DDVBS2_LINK_UHD=OFF
+
+      - name: Build
+        run: make -j$(nproc)
+        working-directory: build
+
+      - name: Unit tests
+        run: ctest --output-on-failure
+        working-directory: build
+
+  regression-test:
+    runs-on: ubuntu-22.04
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ pkg-config python3
+
+      - name: Configure and build
+        run: |
+          mkdir build && cd build
+          cmake .. -G"Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-Wall -funroll-loops" \
+            -DSPU_LINK_HWLOC=OFF \
+            -DDVBS2_LINK_UHD=OFF
+          make -j$(nproc)
+
+      - name: Run baseband simulation smoke test
+        run: |
+          cd build
+          ./bin/dvbs2_tx_rx_bb -m 3.60 -M 3.70 --max-fe 10
