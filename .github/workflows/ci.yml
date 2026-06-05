@@ -13,6 +13,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake g++ pkg-config
@@ -41,11 +43,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake g++ pkg-config python3
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ pkg-config
 
       - name: Configure and build
         run: |
@@ -58,6 +60,5 @@ jobs:
           make -j$(nproc)
 
       - name: Run baseband simulation smoke test
-        run: |
-          cd build
-          ./bin/dvbs2_tx_rx_bb -m 3.60 -M 3.70 --max-fe 10
+        run: ./bin/dvbs2_tx_rx_bb -m 3.60 -M 3.70 --max-fe 10
+        working-directory: build
