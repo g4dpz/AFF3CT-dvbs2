@@ -41,8 +41,11 @@ private:
 	std::thread receive_thread;
 
 	const bool threaded;
+	const int rx_pin_core;
+	const int tx_pin_core;
 	const bool rx_enabled;
 	const bool tx_enabled;
+	const std::string clock_source;
 
 	std::vector<R*>       fifo_send;
 	std::vector<R*>       fifo_receive;
@@ -52,6 +55,8 @@ private:
 	std::vector<int32_t*> fifo_tim_flags;
 
 	std::atomic<bool> stop_threads;
+	int consecutive_rx_timeouts; // Tracks repeated RX timeouts for USB disconnection detection
+	                             // Note: member variable (not static) to support multiple Radio_USRP instances
 
 	std::atomic<std::uint64_t> idx_w_send;
 	std::atomic<std::uint64_t> idx_r_send;

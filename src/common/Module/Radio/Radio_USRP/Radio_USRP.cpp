@@ -1,6 +1,7 @@
 #ifdef DVBS2_LINK_UHD
 
 #include <typeinfo>
+#include <thread>
 #include <uhd/utils/thread.hpp>
 #include <streampu.hpp>
 
@@ -14,8 +15,11 @@ Radio_USRP<R>
 ::Radio_USRP(const factory::Radio& params, const int n_frames)
 : Radio<R>(params.N, params.n_frames),
   threaded(params.threaded),
+  rx_pin_core(params.rx_pin_core),
+  tx_pin_core(params.tx_pin_core),
   rx_enabled(params.rx_enabled),
   tx_enabled(params.tx_enabled),
+  clock_source(params.clock_source),
   fifo_send     (threaded && tx_enabled ? uint64_t(1) + std::max(uint64_t(1), params.fifo_size / (2 * params.N * sizeof(R))) : 0),
   fifo_receive  (threaded && rx_enabled ? uint64_t(1) + std::max(uint64_t(1), params.fifo_size / (2 * params.N * sizeof(R))) : 0),
   fifo_ovf_flags(threaded && rx_enabled ? uint64_t(1) + std::max(uint64_t(1), params.fifo_size / (2 * params.N * sizeof(R))) : 0),
@@ -23,6 +27,7 @@ Radio_USRP<R>
   fifo_clt_flags(threaded && rx_enabled ? uint64_t(1) + std::max(uint64_t(1), params.fifo_size / (2 * params.N * sizeof(R))) : 0),
   fifo_tim_flags(threaded && rx_enabled ? uint64_t(1) + std::max(uint64_t(1), params.fifo_size / (2 * params.N * sizeof(R))) : 0),
   stop_threads(false),
+  consecutive_rx_timeouts(0),
   idx_w_send(0),
   idx_r_send(0),
   idx_w_receive(0),
@@ -75,23 +80,36 @@ Radio_USRP<R>
 	// uhd::log::set_console_level(uhd::log::severity_level(3));
 	// uhd::log::set_file_level   (uhd::log::severity_level(2));
 
-	std::string multi_usrp_str;
-	if (!params.usrp_type.empty())
-		multi_usrp_str += (multi_usrp_str.empty() ? std::string("") : std::string(",")) + "type=" + params.usrp_type;
-	if (!params.usrp_addr.empty())
-		multi_usrp_str += (multi_usrp_str.empty() ? std::string("") : std::string(",")) + "addr=" + params.usrp_addr;
-	if (params.clk_rate != 0)
-		multi_usrp_str += (multi_usrp_str.empty() ? std::string("") : std::string(",")) + "master_clock_rate=" + std::to_string(params.clk_rate);
+	std::string multi_usrp_str = params.build_device_string();
 
-	usrp = uhd::usrp::multi_usrp::make(multi_usrp_str);
+	try
+	{
+		usrp = uhd::usrp::multi_usrp::make(multi_usrp_str);
+	}
+	catch (const std::exception& e)
+	{
+		if (params.usrp_type == "b200")
+		{
+			throw spu::tools::runtime_error(__FILE__, __LINE__, __func__,
+				"Failed to find B200-mini device on USB. Ensure the device is connected and "
+				"UHD images are installed (run 'uhd_images_downloader'). UHD error: " + std::string(e.what()));
+		}
+		throw; // re-throw original for non-B200 types
+	}
 
 	if (params.clk_rate != 0)
 		usrp->set_master_clock_rate(params.clk_rate);
 
+	// Configure clock and time source
+	usrp->set_clock_source(clock_source);
+	if (clock_source == "gpsdo")
+		usrp->set_time_source("gpsdo");
+
 	if (params.rx_enabled)
 	{
-		if (!params.rx_subdev_spec.empty())
-			usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t(params.rx_subdev_spec));
+		std::string rx_subdev = params.get_effective_rx_subdev_spec();
+		if (!rx_subdev.empty())
+			usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t(rx_subdev));
 		usrp->set_rx_antenna(params.rx_antenna);
 		usrp->set_rx_freq(params.rx_freq);
 		usrp->set_rx_gain(params.rx_gain);
@@ -101,8 +119,9 @@ Radio_USRP<R>
 
 	if (params.tx_enabled)
 	{
-		if (!params.tx_subdev_spec.empty())
-			usrp->set_tx_subdev_spec(uhd::usrp::subdev_spec_t(params.tx_subdev_spec));
+		std::string tx_subdev = params.get_effective_tx_subdev_spec();
+		if (!tx_subdev.empty())
+			usrp->set_tx_subdev_spec(uhd::usrp::subdev_spec_t(tx_subdev));
 		usrp->set_tx_freq(params.tx_freq);
 		usrp->set_tx_gain(params.tx_gain);
 		usrp->set_tx_antenna(params.tx_antenna);
@@ -269,7 +288,12 @@ template <typename R>
 void Radio_USRP<R>
 ::thread_function_send()
 {
-	spu::tools::Thread_pinning::pin(3);
+	unsigned int n_cores = std::thread::hardware_concurrency();
+	if (tx_pin_core >= 0 && static_cast<unsigned int>(tx_pin_core) < n_cores)
+		spu::tools::Thread_pinning::pin(tx_pin_core);
+	else if (n_cores > 0)
+		std::cerr << "[WARNING] Radio_USRP: tx_pin_core=" << tx_pin_core
+		          << " exceeds available cores (" << n_cores << "), skipping pinning." << std::endl;
 
 	uhd::set_thread_priority_safe();
 	usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
@@ -284,7 +308,12 @@ template <typename R>
 void Radio_USRP<R>
 ::thread_function_receive()
 {
-	spu::tools::Thread_pinning::pin(1);
+	unsigned int n_cores = std::thread::hardware_concurrency();
+	if (rx_pin_core >= 0 && static_cast<unsigned int>(rx_pin_core) < n_cores)
+		spu::tools::Thread_pinning::pin(rx_pin_core);
+	else if (n_cores > 0)
+		std::cerr << "[WARNING] Radio_USRP: rx_pin_core=" << rx_pin_core
+		          << " exceeds available cores (" << n_cores << "), skipping pinning." << std::endl;
 
 	uhd::set_thread_priority_safe();
 	usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
@@ -304,7 +333,16 @@ void Radio_USRP<R>
 	//md.end_of_burst   = false;
 	//md.has_time_spec  = true;
 	//md.time_spec      = usrp->get_time_now() + uhd::time_spec_t(0.1);
-	tx_stream->send(X_N1, this->N, md);
+	try
+	{
+		tx_stream->send(X_N1, this->N, md);
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "[ERROR] Radio_USRP: TX stream error (" << e.what()
+		          << "). Possible USB disconnection. Initiating graceful shutdown." << std::endl;
+		stop_threads = true;
+	}
 }
 
 template <typename R>
@@ -325,12 +363,12 @@ void Radio_USRP<R>
 		switch (md.error_code)
 		{
 			case uhd::rx_metadata_t::ERROR_CODE_NONE:
-				// possibility to log recovery after overflow
+				consecutive_rx_timeouts = 0;
 				break;
 
 			// ERROR_CODE_OVERFLOW can indicate overflow or sequence error
 			case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
-				// count overflows ?
+				consecutive_rx_timeouts = 0;
 				if (!md.out_of_sequence)
 				{
 					*OVF += 1;
@@ -344,27 +382,34 @@ void Radio_USRP<R>
 
 			case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND:
 				*CLT += 1;
+				consecutive_rx_timeouts = 0;
 				UHD_LOGGER_ERROR("RADIO USRP") << "Receiver error: " << md.strerror();
-				// Radio core will be in the idle state. Issue stream command to restart
-				// streaming.
-				// cmd.time_spec  = usrp->get_time_now() + uhd::time_spec_t(0.05);
-				// rx_stream->issue_stream_cmd(cmd);
 				break;
 
 			case uhd::rx_metadata_t::ERROR_CODE_TIMEOUT:
 				*TIM += 1;
+				consecutive_rx_timeouts++;
 				UHD_LOGGER_ERROR("RADIO USRP") << "Receiver error: " << md.strerror();
+				if (consecutive_rx_timeouts > 10)
+				{
+					std::cerr << "[ERROR] Radio_USRP: Multiple consecutive timeouts detected. "
+					          << "Possible USB disconnection. Initiating graceful shutdown." << std::endl;
+					stop_threads = true;
+					return;
+				}
 				break;
 
-				// Otherwise, it's an error
+			case uhd::rx_metadata_t::ERROR_CODE_BAD_PACKET:
+				std::cerr << "[ERROR] Radio_USRP: Bad packet received. "
+				          << "Possible USB transport error or disconnection. Initiating graceful shutdown." << std::endl;
+				stop_threads = true;
+				return;
+
 			default:
-				// UHD_LOGGER_ERROR("RADIO USRP") << "Receiver error: " << md.strerror();
-				throw spu::tools::runtime_error(__FILE__, __LINE__, __func__, "Error in the Radio USRP streaming.");
-				// std::cerr << "[" << "] Receiver error: " << md.strerror()
-				//           << std::endl;
-				// std::cerr << "[" << "] Unexpected error on recv, continuing..."
-				//           << std::endl;
-				break;
+				std::cerr << "[ERROR] Radio_USRP: Unexpected receive error (" << md.strerror()
+				          << "). Possible USB disconnection. Initiating graceful shutdown." << std::endl;
+				stop_threads = true;
+				return;
 		}
 	}
 }

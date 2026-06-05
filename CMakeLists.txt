@@ -135,3 +135,30 @@ if(DVBS2_LINK_UHD)
 else()
     message(STATUS "DVBS2 - UHD: off")
 endif(DVBS2_LINK_UHD)
+
+# Tests
+enable_testing()
+add_executable(dvbs2_test_radio_validation tests/test_radio_b200_validation.cpp)
+target_include_directories(dvbs2_test_radio_validation PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
+target_link_libraries(dvbs2_test_radio_validation PRIVATE dvbs2_common aff3ct-static-lib)
+add_test(NAME radio_b200_validation COMMAND dvbs2_test_radio_validation)
+
+add_executable(dvbs2_test_radio_device_string tests/test_radio_device_string.cpp)
+target_include_directories(dvbs2_test_radio_device_string PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
+target_link_libraries(dvbs2_test_radio_device_string PRIVATE dvbs2_common aff3ct-static-lib)
+add_test(NAME radio_device_string COMMAND dvbs2_test_radio_device_string)
+
+add_executable(dvbs2_test_radio_subdev_spec tests/test_radio_subdev_spec.cpp)
+target_include_directories(dvbs2_test_radio_subdev_spec PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
+target_link_libraries(dvbs2_test_radio_subdev_spec PRIVATE dvbs2_common aff3ct-static-lib)
+add_test(NAME radio_subdev_spec COMMAND dvbs2_test_radio_subdev_spec)
+
+add_executable(dvbs2_test_radio_clock_source tests/test_radio_clock_source.cpp)
+target_include_directories(dvbs2_test_radio_clock_source PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
+target_link_libraries(dvbs2_test_radio_clock_source PRIVATE dvbs2_common aff3ct-static-lib)
+add_test(NAME radio_clock_source COMMAND dvbs2_test_radio_clock_source)
+
+add_executable(dvbs2_test_radio_thread_pinning tests/test_radio_thread_pinning.cpp)
+target_include_directories(dvbs2_test_radio_thread_pinning PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
+target_link_libraries(dvbs2_test_radio_thread_pinning PRIVATE dvbs2_common aff3ct-static-lib)
+add_test(NAME radio_thread_pinning COMMAND dvbs2_test_radio_thread_pinning)

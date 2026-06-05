@@ -70,7 +70,71 @@ network:
     version: 2
 ```
 
-### Benchmark
+### B200-mini Setup
+
+#### USB Configuration
+
+On Linux, install the UHD udev rules to allow non-root access to the B200-mini:
+
+```bash
+sudo uhd_images_downloader
+sudo cp /usr/local/lib/uhd/utils/uhd-usrp.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+Verify the device is detected:
+
+```bash
+uhd_find_devices --args "type=b200"
+```
+
+#### B200-mini Benchmark
+
+Test USB3 streaming performance:
+
+```bash
+uhd_benchmark_rate --args "type=b200,master_clock_rate=30.72e6" --rx_rate 30.72e6 --tx_rate 30.72e6 --duration 10
+```
+
+#### B200-mini TX Example
+
+```bash
+./bin/dvbs2_tx --rad-usrp-type b200 --rad-clk-rate 30.72e6 \
+    --rad-tx-subdev-spec "A:A" --rad-tx-rate 30.72e6 \
+    --rad-tx-freq 2360e6 --rad-tx-gain 30 --rad-threaded \
+    -F 8 --src-type USER --src-path ../conf/src/K_14232.src --mod-cod QPSK-S_8/9
+```
+
+#### B200-mini RX Example
+
+```bash
+./bin/dvbs2_rx --rad-usrp-type b200 --rad-clk-rate 30.72e6 \
+    --rad-rx-subdev-spec "A:A" --rad-rx-rate 30.72e6 \
+    --rad-rx-freq 2360e6 --rad-rx-gain 20 --rad-threaded \
+    -F 8 --src-type USER --src-path ../conf/src/K_14232.src \
+    --mod-cod QPSK-S_8/9 --dec-implem NMS --dec-ite 10 --dec-simd INTER
+```
+
+#### Master Clock Rate and Sample Rates
+
+The B200-mini's achievable sample rates are integer divisors of the master clock rate:
+
+```
+sample_rate = master_clock_rate / N   (where N is a positive integer)
+```
+
+Recommended master clock rates and their achievable sample rates:
+
+| Master Clock (MHz) | Achievable Sample Rates (MHz) |
+|---------------------|-------------------------------|
+| 61.44 | 30.72, 15.36, 7.68, 3.84, ... |
+| 30.72 | 30.72, 15.36, 7.68, 3.84, ... |
+| 15.36 | 15.36, 7.68, 3.84, ... |
+
+**Note:** The B200-mini supports a maximum master clock rate of 61.44 MHz and maximum sample rate of ~56 MHz (USB3 bandwidth limit). For full-duplex operation (simultaneous TX+RX), the combined sample rate should not exceed ~56 Msps.
+
+### Benchmark (Network USRP)
 
 To validate the installation, you may run the following benchmark:
 

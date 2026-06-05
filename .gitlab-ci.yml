@@ -116,6 +116,23 @@ test-regression-tx-rx-bb:
     - export TIME_SEC="5"
     - ./lib/aff3ct/ci/test-regression.py --refs-path refs/TX_RX_BB/ --results-path test-regression-results-tx-rx-bb --build-path build_linux_gcc --binary-path bin/dvbs2_tx_rx_bb --max-snr-time $TIME_SEC --sensibility 2.5 --weak-rate 0.9 --verbose 1
 
+test-unit-radio-b200:
+  image: registry.gitlab.com/aff3ct/aff3ct/x86_64_ubuntu_gcc:v9.3.0
+  stage: test
+  needs:
+    - job: build-linux-gcc
+      artifacts: true
+  tags:
+    - x86_64
+    - linux
+    - docker
+  script:
+    - build_linux_gcc/bin/dvbs2_test_radio_validation
+    - build_linux_gcc/bin/dvbs2_test_radio_device_string
+    - build_linux_gcc/bin/dvbs2_test_radio_subdev_spec
+    - build_linux_gcc/bin/dvbs2_test_radio_clock_source
+    - build_linux_gcc/bin/dvbs2_test_radio_thread_pinning
+
 # test-regression-tx-rx:
 #   stage: test
 #   variables:

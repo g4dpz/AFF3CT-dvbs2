@@ -46,6 +46,10 @@ public:
 	double tx_freq             = 1090e6;
 	double tx_gain             = 10;
 
+	int rx_pin_core            = 1;
+	int tx_pin_core            = 3;
+	std::string clock_source   = "internal"; // "internal", "gpsdo", "external"
+
 	// deduced parameters
 
 	// ---------------------------------------------------------------------------------------------------- METHODS
@@ -58,6 +62,21 @@ public:
 	virtual void store          (const cli::Argument_map_value &vals);
 	virtual void get_headers    (std::map<std::string,tools::header_list>& headers, const bool full = true) const;
 
+	// B200-mini parameter validation (callable independently of store())
+	void validate() const;
+
+	// Build the UHD device string from current parameters (testable without hardware)
+	std::string build_device_string() const;
+
+	// Get effective subdev specs after B200 defaulting (testable without hardware)
+	std::string get_effective_rx_subdev_spec() const;
+	std::string get_effective_tx_subdev_spec() const;
+
+	// Returns true if the time source should also be set to "gpsdo" (testable without hardware)
+	bool should_set_time_source_gpsdo() const { return clock_source == "gpsdo"; }
+
+	// Returns true if the given pin_core value is valid (non-negative and less than available cores)
+	bool is_pin_core_valid(int pin_core) const;
 
 	template <typename R = float>
 	module::Radio<R>* build() const;

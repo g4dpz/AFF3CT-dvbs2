@@ -1,3 +1,7 @@
+#include <iostream>
+#include <sstream>
+#include <thread>
+
 #include "Factory/Module/Radio/Radio.hpp"
 #include "Module/Radio/Radio_NO/Radio_NO.hpp"
 #include "Module/Radio/Radio_user/Radio_user_binary.hpp"
@@ -48,6 +52,9 @@ void Radio
 	args.add({p+"-ip-addr"       }, cli::Text()                                             , "");
 	args.add({p+"-usrp-type"     }, cli::Text()                                             , "");
 	args.add({p+"-rx-no-loop"    }, cli::None()                                             , "");
+	args.add({p+"-rx-pin-core"   }, cli::Integer(cli::Positive())                           , "");
+	args.add({p+"-tx-pin-core"   }, cli::Integer(cli::Positive())                           , "");
+	args.add({p+"-clock-source"  }, cli::Text(cli::Including_set("internal", "gpsdo", "external")), "");
 }
 
 void Radio
@@ -77,6 +84,124 @@ void Radio
 	if (vals.exist({p+"-ip-addr"       })) this->usrp_addr      = vals.at       ({p+"-ip-addr"       });
 	if (vals.exist({p+"-usrp-type"     })) this->usrp_type      = vals.at       ({p+"-usrp-type"     });
 	if (vals.exist({p+"-rx-no-loop"    })) this->rx_no_loop     = true                                 ;
+	if (vals.exist({p+"-rx-pin-core"   })) this->rx_pin_core    = vals.to_int   ({p+"-rx-pin-core"   });
+	if (vals.exist({p+"-tx-pin-core"   })) this->tx_pin_core    = vals.to_int   ({p+"-tx-pin-core"   });
+	if (vals.exist({p+"-clock-source"  })) this->clock_source   = vals.at       ({p+"-clock-source"  });
+
+	this->validate();
+}
+
+void Radio
+::validate() const
+{
+	if (this->usrp_type == "b200")
+	{
+		// Reject clock rate exceeding B200-mini maximum (61.44 MHz)
+		if (this->clk_rate > 61.44e6)
+		{
+			std::stringstream message;
+			message << "B200-mini maximum master clock rate is 61.44 MHz, but clk_rate="
+			        << this->clk_rate << " was requested.";
+			throw spu::tools::runtime_error(__FILE__, __LINE__, __func__, message.str());
+		}
+
+		// Reject RX sample rate exceeding B200-mini maximum (56 MHz)
+		if (this->rx_rate > 56e6)
+		{
+			std::stringstream message;
+			message << "B200-mini maximum RX sample rate is 56 MHz, but rx_rate="
+			        << this->rx_rate << " was requested.";
+			throw spu::tools::runtime_error(__FILE__, __LINE__, __func__, message.str());
+		}
+
+		// Reject TX sample rate exceeding B200-mini maximum (56 MHz)
+		if (this->tx_rate > 56e6)
+		{
+			std::stringstream message;
+			message << "B200-mini maximum TX sample rate is 56 MHz, but tx_rate="
+			        << this->tx_rate << " was requested.";
+			throw spu::tools::runtime_error(__FILE__, __LINE__, __func__, message.str());
+		}
+
+		// Warn if combined RX+TX rate exceeds USB3 bandwidth (~56 Msps aggregate)
+		if (this->rx_rate > 0 && this->tx_rate > 0 && (this->rx_rate + this->tx_rate) > 56e6)
+		{
+			std::cerr << "[WARNING] B200-mini full-duplex: combined rx_rate + tx_rate = "
+			          << (this->rx_rate + this->tx_rate) / 1e6 << " MHz exceeds recommended "
+			          << "USB3 bandwidth limit of ~56 Msps aggregate. Overflows may occur."
+			          << std::endl;
+		}
+
+		// Reject external clock source (B200-mini does not support external 10 MHz ref without GPSDO)
+		if (this->clock_source == "external")
+		{
+			std::stringstream message;
+			message << "B200-mini does not support an external 10 MHz reference clock. "
+			        << "Use \"internal\" or \"gpsdo\" (if GPSDO module is installed).";
+			throw spu::tools::runtime_error(__FILE__, __LINE__, __func__, message.str());
+		}
+
+		// Warn if antenna is not one of the B200-mini available ports
+		if (!this->rx_antenna.empty() &&
+		    this->rx_antenna != "TX/RX" && this->rx_antenna != "RX2")
+		{
+			std::cerr << "[WARNING] B200-mini antenna port \"" << this->rx_antenna
+			          << "\" is not recognized. Available ports: TX/RX, RX2."
+			          << std::endl;
+		}
+		if (!this->tx_antenna.empty() &&
+		    this->tx_antenna != "TX/RX" && this->tx_antenna != "RX2")
+		{
+			std::cerr << "[WARNING] B200-mini antenna port \"" << this->tx_antenna
+			          << "\" is not recognized. Available ports: TX/RX, RX2."
+			          << std::endl;
+		}
+	}
+}
+
+std::string Radio
+::build_device_string() const
+{
+	std::string device_str;
+
+	if (!this->usrp_type.empty())
+		device_str += (device_str.empty() ? std::string("") : std::string(",")) + "type=" + this->usrp_type;
+
+	if (!this->usrp_addr.empty())
+	{
+		if (this->usrp_type == "b200")
+			device_str += (device_str.empty() ? std::string("") : std::string(",")) + "serial=" + this->usrp_addr;
+		else
+			device_str += (device_str.empty() ? std::string("") : std::string(",")) + "addr=" + this->usrp_addr;
+	}
+
+	if (this->clk_rate != 0)
+		device_str += (device_str.empty() ? std::string("") : std::string(",")) + "master_clock_rate=" + std::to_string(this->clk_rate);
+
+	return device_str;
+}
+
+std::string Radio
+::get_effective_rx_subdev_spec() const
+{
+	if (this->usrp_type == "b200" && this->rx_subdev_spec.empty())
+		return "A:A";
+	return this->rx_subdev_spec;
+}
+
+std::string Radio
+::get_effective_tx_subdev_spec() const
+{
+	if (this->usrp_type == "b200" && this->tx_subdev_spec.empty())
+		return "A:A";
+	return this->tx_subdev_spec;
+}
+
+bool Radio
+::is_pin_core_valid(int pin_core) const
+{
+	unsigned int n_cores = std::thread::hardware_concurrency();
+	return pin_core >= 0 && (n_cores == 0 || static_cast<unsigned int>(pin_core) < n_cores);
 }
 
 void Radio
@@ -108,6 +233,9 @@ void Radio
 		headers[p].push_back(std::make_pair("USRP Tx rate   ", std::to_string(this->tx_rate  )));
 		headers[p].push_back(std::make_pair("USRP Tx freq   ", std::to_string(this->tx_freq  )));
 		headers[p].push_back(std::make_pair("USRP Tx gain   ", std::to_string(this->tx_gain  )));
+		headers[p].push_back(std::make_pair("USRP Clock src ", this->clock_source             ));
+		headers[p].push_back(std::make_pair("USRP Rx pin    ", std::to_string(this->rx_pin_core)));
+		headers[p].push_back(std::make_pair("USRP Tx pin    ", std::to_string(this->tx_pin_core)));
 	}
 }
 
