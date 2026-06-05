@@ -3,8 +3,8 @@ cmake_policy(SET CMP0054 NEW)
 
 project (dvbs2 CXX)
 
-# Enable C++11
-set(CMAKE_CXX_STANDARD 11)
+# Enable C++17 (required by UHD 4.x)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Specify bin path
@@ -34,6 +34,7 @@ set(SRC_FILES_RX_DUMP          ${CMAKE_CURRENT_SOURCE_DIR}/src/mains/RX/dump.cpp
 set(SRC_FILES_TX_RX            ${CMAKE_CURRENT_SOURCE_DIR}/src/mains/TX_RX/main.cpp)
 set(SRC_FILES_TX_RX_BB         ${CMAKE_CURRENT_SOURCE_DIR}/src/mains/TX_RX_BB/main.cpp)
 set(SRC_FILES_CH               ${CMAKE_CURRENT_SOURCE_DIR}/src/mains/CH/main.cpp)
+set(SRC_FILES_LOOPBACK         ${CMAKE_CURRENT_SOURCE_DIR}/src/mains/LOOPBACK/main.cpp)
 
 # Auto generate a header containing the last Git SHA1
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/common/version.cpp.in"
@@ -53,6 +54,7 @@ add_executable(dvbs2_rx_dump       ${SRC_FILES_RX_DUMP})
 add_executable(dvbs2_tx_rx         ${SRC_FILES_TX_RX})
 add_executable(dvbs2_tx_rx_bb      ${SRC_FILES_TX_RX_BB})
 add_executable(dvbs2_ch            ${SRC_FILES_CH})
+add_executable(dvbs2_loopback      ${SRC_FILES_LOOPBACK})
 
 # Link with common sources
 target_link_libraries(dvbs2_tx       PRIVATE dvbs2_common)
@@ -66,6 +68,7 @@ target_link_libraries(dvbs2_rx_dump  PRIVATE dvbs2_common)
 target_link_libraries(dvbs2_tx_rx    PRIVATE dvbs2_common)
 target_link_libraries(dvbs2_tx_rx_bb PRIVATE dvbs2_common)
 target_link_libraries(dvbs2_ch       PRIVATE dvbs2_common)
+target_link_libraries(dvbs2_loopback PRIVATE dvbs2_common)
 
 target_include_directories(dvbs2_common   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
 target_include_directories(dvbs2_tx       PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
@@ -79,6 +82,7 @@ target_include_directories(dvbs2_rx_dump  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(dvbs2_tx_rx    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
 target_include_directories(dvbs2_tx_rx_bb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
 target_include_directories(dvbs2_ch       PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
+target_include_directories(dvbs2_loopback PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/common)
 
 # compile `StreamPU` static lib
 option(SPU_TESTS "" OFF) # do NOT compile the tests
@@ -109,6 +113,7 @@ target_link_libraries(dvbs2_rx_dump  PRIVATE aff3ct-static-lib)
 target_link_libraries(dvbs2_tx_rx    PRIVATE aff3ct-static-lib)
 target_link_libraries(dvbs2_tx_rx_bb PRIVATE aff3ct-static-lib)
 target_link_libraries(dvbs2_ch       PRIVATE aff3ct-static-lib)
+target_link_libraries(dvbs2_loopback PRIVATE aff3ct-static-lib)
 
 # Link with UHD (& boost)
 if(DVBS2_LINK_UHD)
@@ -124,12 +129,9 @@ if(DVBS2_LINK_UHD)
         target_link_libraries(dvbs2_common PRIVATE ${UHD_LIBRARIES})
     endif (UHD_FOUND)
 
-    # Link Boost
-    find_package(Boost QUIET COMPONENTS system filesystem thread REQUIRED)
+    # Link Boost (headers + thread support via UHD's dependency resolution)
+    find_package(Boost QUIET REQUIRED)
     if (Boost_FOUND)
-        target_link_libraries(dvbs2_common PRIVATE ${Boost_FILESYSTEM_LIBRARY}
-                                                   ${Boost_SYSTEM_LIBRARY}
-                                                   ${Boost_THREAD_LIBRARY})
         include_directories(${Boost_INCLUDE_DIRS})
     endif (Boost_FOUND)
 else()
